@@ -10,103 +10,100 @@ LLM::Data::ContentTag - Content classification and model routing for LLM data pi
 
 use LLM::Data::ContentTag;
 
-# Classify content by keywords
-my $classifier = LLM::Data::ContentTag::Classifier.new;
-my $tags = $classifier.classify('An explicit scene with violence.');
-say $tags.nsfw;                      # True
-say $tags.violent;                   # True
-say $tags.needs-unrestricted-model;  # True
-say $tags.all-tags;                  # (nsfw, violent)
+# Define classification rules: tag name → trigger keywords
+my $classifier = LLM::Data::ContentTag::Classifier.new(
+    :rules(%(
+        confidential => <secret classified restricted>,
+        technical    => <algorithm database server>,
+        creative     => <story poem song>,
+    )),
+    :restricted('confidential'),  # Tags that need a local/unrestricted model
+);
 
-# Classify from metadata (e.g., chapter annotations)
+# Classify content
+my $tags = $classifier.classify('Deploy the database server update.');
+say $tags.has-tag('technical');          # True
+say $tags.needs-unrestricted-model;     # False
+say $tags.all-tags;                     # (technical)
+
+# Classify from metadata
 my $tags2 = $classifier.classify-from-metadata(%(
-    is_nsfw => True,
-    custom_tags => ['dark-humor'],
+    confidential => True,
+    technical    => False,
 ));
 
-# Custom keyword lists
-my $custom = LLM::Data::ContentTag::Classifier.new(
-    :nsfw-keywords('lewd', 'suggestive', 'explicit'),
-    :violent-keywords('combat', 'warfare'),
-);
-
-# Route to appropriate LLM backend
+# Route to appropriate backend
 my $router = LLM::Data::ContentTag::Router.new(
-    :default-backend('claude-api'),
-    :unrestricted-backend('local-kobold'),
+    :default-backend('cloud-api'),
 );
-say $router.select-backend($tags);   # "local-kobold"
+$router.add-route('local-model', 'confidential', 'restricted');
+$router.add-route('reasoning-model', 'technical');
 
-# Custom per-tag routes
-$router.add-route('dark-humor', 'humor-specialist');
+say $router.select-backend($tags);      # "reasoning-model"
 
 =end code
 
 =head1 DESCRIPTION
 
 LLM::Data::ContentTag provides content classification and model routing for
-LLM data generation pipelines.
+LLM data generation pipelines. Tags and rules are fully configurable — no
+hardcoded categories.
 
 =head2 LLM::Data::ContentTag::Tags
 
-Immutable content tag set for a piece of content.
+Immutable content tag set. Tags are arbitrary string keys with boolean values.
 
 =begin code :lang<raku>
 
 my $t = LLM::Data::ContentTag::Tags.new(
-    :nsfw,                    # Bool, default False
-    :violent,                 # Bool, default False
-    :gore,                    # Bool, default False
-    :custom('tag1', 'tag2'),  # Str array, default empty
+    :tags(%(confidential => True, draft => True)),
+    :restricted('confidential'),   # Which tags need an unrestricted model
 );
 
-$t.nsfw;                      # Bool
-$t.violent;                   # Bool
-$t.gore;                      # Bool
-$t.custom;                    # List of Str
-$t.needs-unrestricted-model;  # True if any of nsfw/violent/gore
-$t.all-tags;                  # Combined list of active tag names
-$t.to-hash;                   # Serializable Hash
+$t.has-tag('confidential');        # True
+$t.has-tag('missing');             # False
+$t.needs-unrestricted-model;      # True (confidential is restricted and true)
+$t.all-tags;                      # List of tag names that are true
+$t.to-hash;                      # Serializable Hash
 LLM::Data::ContentTag::Tags.from-hash(%data);  # Deserialize
 
 =end code
 
 =head2 LLM::Data::ContentTag::Classifier
 
-Assigns tags to content. Rule-based keyword detection with customizable word lists.
+Assigns tags to content via configurable keyword rules.
 
 =begin code :lang<raku>
 
 my $c = LLM::Data::ContentTag::Classifier.new(
-    :nsfw-keywords('explicit', 'nude'),       # Override defaults
-    :violent-keywords('kill', 'murder'),
-    :gore-keywords('gore', 'dismember'),
+    :rules(%(
+        tag-name => <keyword1 keyword2 keyword3>,
+    )),
+    :restricted('tag-name'),       # Optional: tags needing unrestricted model
 );
 
-$c.classify(Str $content --> Tags);           # Classify by keywords
-$c.classify-from-metadata(%meta --> Tags);    # Classify from metadata hash
+$c.classify(Str $content --> Tags);           # Match keywords (case-insensitive)
+$c.classify-from-metadata(%meta --> Tags);    # Set tags from a metadata hash
 
 =end code
 
-Metadata keys: C<nsfw>/C<is_nsfw>, C<violent>/C<is_violent>, C<gore>/C<is_gore>, C<custom_tags>.
-
 =head2 LLM::Data::ContentTag::Router
 
-Maps content tags to LLM backend identifiers.
+Maps content tags to backend identifiers. Routes are checked in order — first match wins.
 
 =begin code :lang<raku>
 
 my $r = LLM::Data::ContentTag::Router.new(
-    :default-backend('safe-model'),
-    :unrestricted-backend('uncensored-model'),
+    :default-backend('cloud-api'),
 );
 
-$r.add-route('dark-humor', 'special-model');  # Per-tag override
-$r.select-backend($tags --> Str);              # Returns backend name
+# Route if content has ANY of these tags
+$r.add-route('local-model', 'confidential', 'restricted');
+$r.add-route('reasoning-model', 'technical');
+
+$r.select-backend($tags --> Str);  # Returns matching backend or default
 
 =end code
-
-Priority: custom per-tag routes > unrestricted (if any restricted flag) > default.
 
 =head1 AUTHOR
 

@@ -3,64 +3,62 @@ use lib 'lib';
 use LLM::Data::ContentTag::Classifier;
 use LLM::Data::ContentTag::Tags;
 
-plan 8;
+plan 7;
 
-my LLM::Data::ContentTag::Classifier $c .= new;
+my LLM::Data::ContentTag::Classifier $c .= new(
+	:rules(%(
+		confidential => <secret classified restricted>,
+		technical    => <algorithm database server>,
+		creative     => <story poem song>,
+	)),
+	:restricted('confidential',),
+);
 
-subtest 'Safe content — no tags' => {
+subtest 'No rules match — no tags' => {
 	plan 1;
-	my LLM::Data::ContentTag::Tags $t = $c.classify('A peaceful meadow at sunset.');
-	nok $t.needs-unrestricted-model, 'Safe content detected';
+	my LLM::Data::ContentTag::Tags $t = $c.classify('A beautiful sunset.');
+	is $t.all-tags.elems, 0, 'No tags matched';
 };
 
-subtest 'NSFW content detected' => {
+subtest 'Single rule matches' => {
 	plan 2;
-	my LLM::Data::ContentTag::Tags $t = $c.classify('An explicit nude scene.');
-	ok $t.nsfw, 'NSFW detected';
-	nok $t.violent, 'Not violent';
+	my LLM::Data::ContentTag::Tags $t = $c.classify('Optimise the database query.');
+	ok $t.has-tag('technical'), 'Technical detected';
+	nok $t.has-tag('confidential'), 'Not confidential';
 };
 
-subtest 'Violent content detected' => {
+subtest 'Multiple rules match' => {
 	plan 2;
-	my LLM::Data::ContentTag::Tags $t = $c.classify('The warrior stabbed the dragon.');
-	ok $t.violent, 'Violence detected';
-	nok $t.nsfw, 'Not NSFW';
+	my LLM::Data::ContentTag::Tags $t = $c.classify('Write a story about a database.');
+	ok $t.has-tag('creative'), 'Creative detected';
+	ok $t.has-tag('technical'), 'Technical detected';
 };
 
-subtest 'Gore content detected' => {
+subtest 'Restricted tag triggers needs-unrestricted-model' => {
 	plan 1;
-	my LLM::Data::ContentTag::Tags $t = $c.classify('Gore and dismemberment everywhere.');
-	ok $t.gore, 'Gore detected';
-};
-
-subtest 'Multiple tags on same content' => {
-	plan 2;
-	my LLM::Data::ContentTag::Tags $t = $c.classify('A nude fight scene with blood.');
-	ok $t.nsfw, 'NSFW detected';
-	ok $t.violent, 'Violence detected';
+	my LLM::Data::ContentTag::Tags $t = $c.classify('This is classified information.');
+	ok $t.needs-unrestricted-model, 'Restricted content detected';
 };
 
 subtest 'Case insensitive' => {
 	plan 1;
-	my LLM::Data::ContentTag::Tags $t = $c.classify('EXPLICIT NUDE content');
-	ok $t.nsfw, 'Case insensitive detection';
+	my LLM::Data::ContentTag::Tags $t = $c.classify('TOP SECRET CLASSIFIED DATA');
+	ok $t.has-tag('confidential'), 'Case insensitive match';
 };
 
 subtest 'classify-from-metadata' => {
-	plan 3;
+	plan 2;
 	my LLM::Data::ContentTag::Tags $t = $c.classify-from-metadata(%(
-		is_nsfw => True, violent => False, custom_tags => ['dark'],
+		confidential => True,
+		technical => False,
 	));
-	ok $t.nsfw, 'nsfw from metadata';
-	nok $t.violent, 'violent not set';
-	is $t.custom[0], 'dark', 'Custom tag from metadata';
+	ok $t.has-tag('confidential'), 'Metadata tag set';
+	nok $t.has-tag('technical'), 'Metadata tag not set';
 };
 
-subtest 'Custom keyword lists' => {
+subtest 'Empty rules classifier' => {
 	plan 1;
-	my LLM::Data::ContentTag::Classifier $custom .= new(
-		:nsfw-keywords('lewd', 'suggestive'),
-	);
-	my LLM::Data::ContentTag::Tags $t = $custom.classify('A suggestive pose.');
-	ok $t.nsfw, 'Custom keyword detected';
+	my LLM::Data::ContentTag::Classifier $empty .= new;
+	my LLM::Data::ContentTag::Tags $t = $empty.classify('Anything at all.');
+	is $t.all-tags.elems, 0, 'No rules = no tags';
 };

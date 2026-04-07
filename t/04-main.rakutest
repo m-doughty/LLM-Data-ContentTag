@@ -7,34 +7,36 @@ use LLM::Data::ContentTag::Router;
 
 plan 3;
 
-subtest 'All types accessible via main module' => {
+subtest 'All types accessible' => {
 	plan 3;
 	ok LLM::Data::ContentTag::Tags.new ~~ LLM::Data::ContentTag::Tags, 'Tags available';
 	ok LLM::Data::ContentTag::Classifier.new ~~ LLM::Data::ContentTag::Classifier, 'Classifier available';
 	ok LLM::Data::ContentTag::Router.new(
-		:default-backend('a'), :unrestricted-backend('b')
+		:default-backend('a')
 	) ~~ LLM::Data::ContentTag::Router, 'Router available';
 };
 
 subtest 'End-to-end: classify then route' => {
 	plan 1;
-	my LLM::Data::ContentTag::Classifier $c .= new;
-	my LLM::Data::ContentTag::Router $r .= new(
-		:default-backend('safe-model'),
-		:unrestricted-backend('uncensored-model'),
+	my LLM::Data::ContentTag::Classifier $c .= new(
+		:rules(%(confidential => <secret classified>)),
+		:restricted('confidential',),
 	);
-	my LLM::Data::ContentTag::Tags $tags = $c.classify('An explicit nude scene with blood.');
-	my Str:D $backend = $r.select-backend($tags);
-	is $backend, 'uncensored-model', 'NSFW+violent routes to uncensored';
+	my LLM::Data::ContentTag::Router $r .= new(:default-backend('cloud'));
+	$r.add-route('local', 'confidential');
+
+	my LLM::Data::ContentTag::Tags $tags = $c.classify('This is classified.');
+	is $r.select-backend($tags), 'local', 'Classified content routed to local';
 };
 
 subtest 'End-to-end: safe content' => {
 	plan 1;
-	my LLM::Data::ContentTag::Classifier $c .= new;
-	my LLM::Data::ContentTag::Router $r .= new(
-		:default-backend('safe-model'),
-		:unrestricted-backend('uncensored-model'),
+	my LLM::Data::ContentTag::Classifier $c .= new(
+		:rules(%(confidential => <secret classified>)),
 	);
-	my LLM::Data::ContentTag::Tags $tags = $c.classify('A beautiful sunrise over the mountains.');
-	is $r.select-backend($tags), 'safe-model', 'Safe content routes to safe model';
+	my LLM::Data::ContentTag::Router $r .= new(:default-backend('cloud'));
+	$r.add-route('local', 'confidential');
+
+	my LLM::Data::ContentTag::Tags $tags = $c.classify('A beautiful sunrise.');
+	is $r.select-backend($tags), 'cloud', 'Safe content routed to cloud';
 };

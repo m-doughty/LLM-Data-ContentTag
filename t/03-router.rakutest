@@ -3,47 +3,45 @@ use lib 'lib';
 use LLM::Data::ContentTag::Router;
 use LLM::Data::ContentTag::Tags;
 
-plan 6;
+plan 5;
 
-my LLM::Data::ContentTag::Router $r .= new(
-	:default-backend('claude-api'),
-	:unrestricted-backend('local-kobold'),
-);
-
-subtest 'Safe content routes to default' => {
+subtest 'No routes — default backend' => {
 	plan 1;
-	my LLM::Data::ContentTag::Tags $t .= new;
-	is $r.select-backend($t), 'claude-api', 'Default backend for safe content';
+	my LLM::Data::ContentTag::Router $r .= new(:default-backend('cloud-api'));
+	my LLM::Data::ContentTag::Tags $t .= new(:tags(%(public => True)));
+	is $r.select-backend($t), 'cloud-api', 'Default backend';
 };
 
-subtest 'NSFW routes to unrestricted' => {
+subtest 'Route matches tag' => {
 	plan 1;
-	my LLM::Data::ContentTag::Tags $t .= new(:nsfw);
-	is $r.select-backend($t), 'local-kobold', 'Unrestricted for NSFW';
+	my LLM::Data::ContentTag::Router $r .= new(:default-backend('cloud-api'));
+	$r.add-route('local-model', 'confidential');
+	my LLM::Data::ContentTag::Tags $t .= new(:tags(%(confidential => True)));
+	is $r.select-backend($t), 'local-model', 'Confidential routed to local';
 };
 
-subtest 'Violent routes to unrestricted' => {
+subtest 'Route with multiple tags — any match' => {
 	plan 1;
-	my LLM::Data::ContentTag::Tags $t .= new(:violent);
-	is $r.select-backend($t), 'local-kobold', 'Unrestricted for violent';
+	my LLM::Data::ContentTag::Router $r .= new(:default-backend('cloud-api'));
+	$r.add-route('local-model', 'confidential', 'restricted');
+	my LLM::Data::ContentTag::Tags $t .= new(:tags(%(restricted => True)));
+	is $r.select-backend($t), 'local-model', 'Restricted routed to local';
 };
 
-subtest 'Gore routes to unrestricted' => {
+subtest 'First route wins' => {
 	plan 1;
-	my LLM::Data::ContentTag::Tags $t .= new(:gore);
-	is $r.select-backend($t), 'local-kobold', 'Unrestricted for gore';
+	my LLM::Data::ContentTag::Router $r .= new(:default-backend('cloud-api'));
+	$r.add-route('model-a', 'technical');
+	$r.add-route('model-b', 'technical');
+	my LLM::Data::ContentTag::Tags $t .= new(:tags(%(technical => True)));
+	is $r.select-backend($t), 'model-a', 'First route takes priority';
 };
 
-subtest 'Custom route overrides' => {
+subtest 'Non-matching route skipped' => {
 	plan 1;
-	$r.add-route('dark-humor', 'special-model');
-	my LLM::Data::ContentTag::Tags $t .= new(:custom('dark-humor',));
-	is $r.select-backend($t), 'special-model', 'Custom route matched';
-};
-
-subtest 'Custom route takes priority over unrestricted' => {
-	plan 1;
-	$r.add-route('nsfw', 'nsfw-specialist');
-	my LLM::Data::ContentTag::Tags $t .= new(:nsfw);
-	is $r.select-backend($t), 'nsfw-specialist', 'Custom nsfw route overrides generic unrestricted';
+	my LLM::Data::ContentTag::Router $r .= new(:default-backend('cloud-api'));
+	$r.add-route('reasoning-model', 'technical');
+	$r.add-route('local-model', 'confidential');
+	my LLM::Data::ContentTag::Tags $t .= new(:tags(%(confidential => True)));
+	is $r.select-backend($t), 'local-model', 'Skipped technical, matched confidential';
 };

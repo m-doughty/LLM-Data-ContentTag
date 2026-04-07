@@ -2,79 +2,83 @@ use Test;
 use lib 'lib';
 use LLM::Data::ContentTag::Tags;
 
-plan 10;
+plan 9;
 
-subtest 'Default tags are all false' => {
-	plan 3;
-	my LLM::Data::ContentTag::Tags $t .= new;
-	nok $t.nsfw, 'nsfw false';
-	nok $t.violent, 'violent false';
-	nok $t.gore, 'gore false';
-};
-
-subtest 'Set individual flags' => {
+subtest 'Empty tags' => {
 	plan 2;
-	my LLM::Data::ContentTag::Tags $t .= new(:nsfw);
-	ok $t.nsfw, 'nsfw set';
-	nok $t.violent, 'violent still false';
-};
-
-subtest 'needs-unrestricted-model — any restricted flag' => {
-	plan 4;
-	nok LLM::Data::ContentTag::Tags.new.needs-unrestricted-model, 'Safe content';
-	ok LLM::Data::ContentTag::Tags.new(:nsfw).needs-unrestricted-model, 'NSFW needs unrestricted';
-	ok LLM::Data::ContentTag::Tags.new(:violent).needs-unrestricted-model, 'Violent needs unrestricted';
-	ok LLM::Data::ContentTag::Tags.new(:gore).needs-unrestricted-model, 'Gore needs unrestricted';
-};
-
-subtest 'needs-unrestricted-model — multiple flags' => {
-	plan 1;
-	ok LLM::Data::ContentTag::Tags.new(:nsfw, :violent).needs-unrestricted-model,
-		'Multiple flags still needs unrestricted';
-};
-
-subtest 'custom tags' => {
-	plan 2;
-	my LLM::Data::ContentTag::Tags $t .= new(:custom('dark-humor', 'taboo'));
-	is $t.custom.elems, 2, '2 custom tags';
-	is $t.custom[0], 'dark-humor', 'First custom tag correct';
-};
-
-subtest 'all-tags combines everything' => {
-	plan 1;
-	my LLM::Data::ContentTag::Tags $t .= new(:nsfw, :gore, :custom('extra',));
-	is-deeply $t.all-tags.List, ('nsfw', 'gore', 'extra'), 'All tags listed';
-};
-
-subtest 'all-tags empty when nothing set' => {
-	plan 1;
 	my LLM::Data::ContentTag::Tags $t .= new;
 	is $t.all-tags.elems, 0, 'No tags';
+	nok $t.needs-unrestricted-model, 'No restricted model needed';
+};
+
+subtest 'Set tags via constructor' => {
+	plan 2;
+	my LLM::Data::ContentTag::Tags $t .= new(
+		:tags(%(confidential => True, draft => True)),
+	);
+	ok $t.has-tag('confidential'), 'Has confidential';
+	ok $t.has-tag('draft'), 'Has draft';
+};
+
+subtest 'has-tag returns False for absent' => {
+	plan 1;
+	my LLM::Data::ContentTag::Tags $t .= new(:tags(%(a => True)));
+	nok $t.has-tag('missing'), 'Absent tag returns False';
+};
+
+subtest 'all-tags returns only true tags sorted' => {
+	plan 1;
+	my LLM::Data::ContentTag::Tags $t .= new(
+		:tags(%(zebra => True, alpha => True, off => False)),
+	);
+	is-deeply $t.all-tags.List, ('alpha', 'zebra'), 'True tags sorted, false excluded';
+};
+
+subtest 'needs-unrestricted-model with restricted list' => {
+	plan 2;
+	my LLM::Data::ContentTag::Tags $t .= new(
+		:tags(%(confidential => True, public => True)),
+		:restricted('confidential',),
+	);
+	ok $t.needs-unrestricted-model, 'Restricted tag present';
+
+	my LLM::Data::ContentTag::Tags $t2 .= new(
+		:tags(%(public => True)),
+		:restricted('confidential',),
+	);
+	nok $t2.needs-unrestricted-model, 'No restricted tags present';
+};
+
+subtest 'needs-unrestricted-model — no restricted list' => {
+	plan 1;
+	my LLM::Data::ContentTag::Tags $t .= new(:tags(%(anything => True)));
+	nok $t.needs-unrestricted-model, 'No restricted list = never needs unrestricted';
 };
 
 subtest 'to-hash round-trip' => {
-	plan 1;
-	my LLM::Data::ContentTag::Tags $orig .= new(:nsfw, :custom('x',));
+	plan 2;
+	my LLM::Data::ContentTag::Tags $orig .= new(
+		:tags(%(confidential => True, public => False)),
+		:restricted('confidential',),
+	);
 	my %h = $orig.to-hash;
 	my LLM::Data::ContentTag::Tags $restored = LLM::Data::ContentTag::Tags.from-hash(%h);
-	ok $restored.nsfw, 'nsfw preserved';
+	ok $restored.has-tag('confidential'), 'Tag preserved';
+	ok $restored.needs-unrestricted-model, 'Restricted list preserved';
 };
 
-subtest 'from-hash with missing keys uses defaults' => {
-	plan 3;
+subtest 'from-hash with empty data' => {
+	plan 1;
 	my LLM::Data::ContentTag::Tags $t = LLM::Data::ContentTag::Tags.from-hash({});
-	nok $t.nsfw, 'nsfw defaults false';
-	nok $t.violent, 'violent defaults false';
-	is $t.custom.elems, 0, 'No custom tags';
+	is $t.all-tags.elems, 0, 'Empty hash = no tags';
 };
 
-subtest 'from-hash with all keys' => {
-	plan 4;
-	my LLM::Data::ContentTag::Tags $t = LLM::Data::ContentTag::Tags.from-hash(%(
-		nsfw => True, violent => True, gore => False, custom => ['a', 'b'],
-	));
-	ok $t.nsfw, 'nsfw set';
-	ok $t.violent, 'violent set';
-	nok $t.gore, 'gore not set';
-	is $t.custom.elems, 2, '2 custom tags';
+subtest 'Multiple restricted tags' => {
+	plan 2;
+	my LLM::Data::ContentTag::Tags $t .= new(
+		:tags(%(a => True, b => False, c => True)),
+		:restricted('a', 'b', 'c'),
+	);
+	ok $t.needs-unrestricted-model, 'a is restricted and true';
+	is $t.all-tags.elems, 2, 'Only true tags listed';
 };

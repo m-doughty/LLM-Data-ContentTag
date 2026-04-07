@@ -2,6 +2,12 @@ Revision history for LLM::Data::ContentTag
 
 {{$NEXT}}
 
+0.1.1  2026-04-07T19:22:46+01:00
+    - Tags: replaced hardcoded nsfw/violent/gore with generic hash-based tags
+    - Classifier: replaced fixed keyword lists with configurable rules hash
+    - Classifier: added restricted tag list for unrestricted model routing
+    - Router: removed required unrestricted-backend, routes are now tag-based
+
 0.1.0  2026-04-07T18:50:57+01:00
     - Initial release
     - Tags class with nsfw/violent/gore/custom flags

@@ -1,37 +1,32 @@
 unit class LLM::Data::ContentTag::Tags;
 
-has Bool:D $.nsfw = False;
-has Bool:D $.violent = False;
-has Bool:D $.gore = False;
-has Str @.custom;
+has Bool %.tags;
+has Str @.restricted;  # Tag names that require an unrestricted model
+
+method has-tag(Str:D $tag --> Bool:D) {
+	%!tags{$tag} // False;
+}
 
 method needs-unrestricted-model(--> Bool:D) {
-	$!nsfw || $!violent || $!gore;
+	so @!restricted.first({ %!tags{$_} });
 }
 
 method all-tags(--> List) {
-	my @tags;
-	@tags.push('nsfw') if $!nsfw;
-	@tags.push('violent') if $!violent;
-	@tags.push('gore') if $!gore;
-	@tags.append(@!custom);
-	@tags.list;
+	%!tags.keys.grep({ %!tags{$_} }).sort.list;
 }
 
 method to-hash(--> Hash) {
 	%(
-		nsfw     => $!nsfw,
-		violent  => $!violent,
-		gore     => $!gore,
-		custom   => @!custom.list,
+		tags       => %!tags.Hash,
+		restricted => @!restricted.list,
 	);
 }
 
 method from-hash(%data --> LLM::Data::ContentTag::Tags:D) {
-	self.new(
-		nsfw     => %data<nsfw> // False,
-		violent  => %data<violent> // False,
-		gore     => %data<gore> // False,
-		custom   => (%data<custom> // []).list,
-	);
+	my Str @restricted = (%data<restricted> // []).list;
+	my %tags;
+	for (%data<tags> // %()).kv -> Str $k, $v {
+		%tags{$k} = ?$v;
+	}
+	self.new(:%tags, :@restricted);
 }
