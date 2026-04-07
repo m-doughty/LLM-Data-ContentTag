@@ -1,0 +1,49 @@
+use Test;
+use lib 'lib';
+use LLM::Data::ContentTag::Router;
+use LLM::Data::ContentTag::Tags;
+
+plan 6;
+
+my LLM::Data::ContentTag::Router $r .= new(
+	:default-backend('claude-api'),
+	:unrestricted-backend('local-kobold'),
+);
+
+subtest 'Safe content routes to default' => {
+	plan 1;
+	my LLM::Data::ContentTag::Tags $t .= new;
+	is $r.select-backend($t), 'claude-api', 'Default backend for safe content';
+};
+
+subtest 'NSFW routes to unrestricted' => {
+	plan 1;
+	my LLM::Data::ContentTag::Tags $t .= new(:nsfw);
+	is $r.select-backend($t), 'local-kobold', 'Unrestricted for NSFW';
+};
+
+subtest 'Violent routes to unrestricted' => {
+	plan 1;
+	my LLM::Data::ContentTag::Tags $t .= new(:violent);
+	is $r.select-backend($t), 'local-kobold', 'Unrestricted for violent';
+};
+
+subtest 'Gore routes to unrestricted' => {
+	plan 1;
+	my LLM::Data::ContentTag::Tags $t .= new(:gore);
+	is $r.select-backend($t), 'local-kobold', 'Unrestricted for gore';
+};
+
+subtest 'Custom route overrides' => {
+	plan 1;
+	$r.add-route('dark-humor', 'special-model');
+	my LLM::Data::ContentTag::Tags $t .= new(:custom('dark-humor',));
+	is $r.select-backend($t), 'special-model', 'Custom route matched';
+};
+
+subtest 'Custom route takes priority over unrestricted' => {
+	plan 1;
+	$r.add-route('nsfw', 'nsfw-specialist');
+	my LLM::Data::ContentTag::Tags $t .= new(:nsfw);
+	is $r.select-backend($t), 'nsfw-specialist', 'Custom nsfw route overrides generic unrestricted';
+};

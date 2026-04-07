@@ -1,0 +1,66 @@
+use Test;
+use lib 'lib';
+use LLM::Data::ContentTag::Classifier;
+use LLM::Data::ContentTag::Tags;
+
+plan 8;
+
+my LLM::Data::ContentTag::Classifier $c .= new;
+
+subtest 'Safe content — no tags' => {
+	plan 1;
+	my LLM::Data::ContentTag::Tags $t = $c.classify('A peaceful meadow at sunset.');
+	nok $t.needs-unrestricted-model, 'Safe content detected';
+};
+
+subtest 'NSFW content detected' => {
+	plan 2;
+	my LLM::Data::ContentTag::Tags $t = $c.classify('An explicit nude scene.');
+	ok $t.nsfw, 'NSFW detected';
+	nok $t.violent, 'Not violent';
+};
+
+subtest 'Violent content detected' => {
+	plan 2;
+	my LLM::Data::ContentTag::Tags $t = $c.classify('The warrior stabbed the dragon.');
+	ok $t.violent, 'Violence detected';
+	nok $t.nsfw, 'Not NSFW';
+};
+
+subtest 'Gore content detected' => {
+	plan 1;
+	my LLM::Data::ContentTag::Tags $t = $c.classify('Gore and dismemberment everywhere.');
+	ok $t.gore, 'Gore detected';
+};
+
+subtest 'Multiple tags on same content' => {
+	plan 2;
+	my LLM::Data::ContentTag::Tags $t = $c.classify('A nude fight scene with blood.');
+	ok $t.nsfw, 'NSFW detected';
+	ok $t.violent, 'Violence detected';
+};
+
+subtest 'Case insensitive' => {
+	plan 1;
+	my LLM::Data::ContentTag::Tags $t = $c.classify('EXPLICIT NUDE content');
+	ok $t.nsfw, 'Case insensitive detection';
+};
+
+subtest 'classify-from-metadata' => {
+	plan 3;
+	my LLM::Data::ContentTag::Tags $t = $c.classify-from-metadata(%(
+		is_nsfw => True, violent => False, custom_tags => ['dark'],
+	));
+	ok $t.nsfw, 'nsfw from metadata';
+	nok $t.violent, 'violent not set';
+	is $t.custom[0], 'dark', 'Custom tag from metadata';
+};
+
+subtest 'Custom keyword lists' => {
+	plan 1;
+	my LLM::Data::ContentTag::Classifier $custom .= new(
+		:nsfw-keywords('lewd', 'suggestive'),
+	);
+	my LLM::Data::ContentTag::Tags $t = $custom.classify('A suggestive pose.');
+	ok $t.nsfw, 'Custom keyword detected';
+};

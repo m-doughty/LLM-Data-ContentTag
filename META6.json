@@ -1,0 +1,34 @@
+{
+  "auth": "zef:apogee",
+  "authors": [
+    "Matt Doughty"
+  ],
+  "build-depends": [
+  ],
+  "depends": [
+    "Roaring::Tags",
+    "CRoaring"
+  ],
+  "description": "Content classification and model routing for LLM data pipelines",
+  "license": "Artistic-2.0",
+  "name": "LLM::Data::ContentTag",
+  "perl": "6.d",
+  "provides": {
+    "LLM::Data::ContentTag": "lib/LLM/Data/ContentTag.rakumod",
+    "LLM::Data::ContentTag::Classifier": "lib/LLM/Data/ContentTag/Classifier.rakumod",
+    "LLM::Data::ContentTag::Router": "lib/LLM/Data/ContentTag/Router.rakumod",
+    "LLM::Data::ContentTag::Tags": "lib/LLM/Data/ContentTag/Tags.rakumod"
+  },
+  "resources": [
+  ],
+  "source-url": "https://github.com/m-doughty/LLM-Data-ContentTag.git",
+  "tags": [
+    "llm",
+    "content",
+    "classification",
+    "routing"
+  ],
+  "test-depends": [
+  ],
+  "version": "0.1.0"
+}

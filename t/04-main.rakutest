@@ -1,0 +1,40 @@
+use Test;
+use lib 'lib';
+use LLM::Data::ContentTag;
+use LLM::Data::ContentTag::Tags;
+use LLM::Data::ContentTag::Classifier;
+use LLM::Data::ContentTag::Router;
+
+plan 3;
+
+subtest 'All types accessible via main module' => {
+	plan 3;
+	ok LLM::Data::ContentTag::Tags.new ~~ LLM::Data::ContentTag::Tags, 'Tags available';
+	ok LLM::Data::ContentTag::Classifier.new ~~ LLM::Data::ContentTag::Classifier, 'Classifier available';
+	ok LLM::Data::ContentTag::Router.new(
+		:default-backend('a'), :unrestricted-backend('b')
+	) ~~ LLM::Data::ContentTag::Router, 'Router available';
+};
+
+subtest 'End-to-end: classify then route' => {
+	plan 1;
+	my LLM::Data::ContentTag::Classifier $c .= new;
+	my LLM::Data::ContentTag::Router $r .= new(
+		:default-backend('safe-model'),
+		:unrestricted-backend('uncensored-model'),
+	);
+	my LLM::Data::ContentTag::Tags $tags = $c.classify('An explicit nude scene with blood.');
+	my Str:D $backend = $r.select-backend($tags);
+	is $backend, 'uncensored-model', 'NSFW+violent routes to uncensored';
+};
+
+subtest 'End-to-end: safe content' => {
+	plan 1;
+	my LLM::Data::ContentTag::Classifier $c .= new;
+	my LLM::Data::ContentTag::Router $r .= new(
+		:default-backend('safe-model'),
+		:unrestricted-backend('uncensored-model'),
+	);
+	my LLM::Data::ContentTag::Tags $tags = $c.classify('A beautiful sunrise over the mountains.');
+	is $r.select-backend($tags), 'safe-model', 'Safe content routes to safe model';
+};

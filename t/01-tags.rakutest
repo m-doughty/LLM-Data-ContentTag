@@ -1,0 +1,80 @@
+use Test;
+use lib 'lib';
+use LLM::Data::ContentTag::Tags;
+
+plan 10;
+
+subtest 'Default tags are all false' => {
+	plan 3;
+	my LLM::Data::ContentTag::Tags $t .= new;
+	nok $t.nsfw, 'nsfw false';
+	nok $t.violent, 'violent false';
+	nok $t.gore, 'gore false';
+};
+
+subtest 'Set individual flags' => {
+	plan 2;
+	my LLM::Data::ContentTag::Tags $t .= new(:nsfw);
+	ok $t.nsfw, 'nsfw set';
+	nok $t.violent, 'violent still false';
+};
+
+subtest 'needs-unrestricted-model — any restricted flag' => {
+	plan 4;
+	nok LLM::Data::ContentTag::Tags.new.needs-unrestricted-model, 'Safe content';
+	ok LLM::Data::ContentTag::Tags.new(:nsfw).needs-unrestricted-model, 'NSFW needs unrestricted';
+	ok LLM::Data::ContentTag::Tags.new(:violent).needs-unrestricted-model, 'Violent needs unrestricted';
+	ok LLM::Data::ContentTag::Tags.new(:gore).needs-unrestricted-model, 'Gore needs unrestricted';
+};
+
+subtest 'needs-unrestricted-model — multiple flags' => {
+	plan 1;
+	ok LLM::Data::ContentTag::Tags.new(:nsfw, :violent).needs-unrestricted-model,
+		'Multiple flags still needs unrestricted';
+};
+
+subtest 'custom tags' => {
+	plan 2;
+	my LLM::Data::ContentTag::Tags $t .= new(:custom('dark-humor', 'taboo'));
+	is $t.custom.elems, 2, '2 custom tags';
+	is $t.custom[0], 'dark-humor', 'First custom tag correct';
+};
+
+subtest 'all-tags combines everything' => {
+	plan 1;
+	my LLM::Data::ContentTag::Tags $t .= new(:nsfw, :gore, :custom('extra',));
+	is-deeply $t.all-tags.List, ('nsfw', 'gore', 'extra'), 'All tags listed';
+};
+
+subtest 'all-tags empty when nothing set' => {
+	plan 1;
+	my LLM::Data::ContentTag::Tags $t .= new;
+	is $t.all-tags.elems, 0, 'No tags';
+};
+
+subtest 'to-hash round-trip' => {
+	plan 1;
+	my LLM::Data::ContentTag::Tags $orig .= new(:nsfw, :custom('x',));
+	my %h = $orig.to-hash;
+	my LLM::Data::ContentTag::Tags $restored = LLM::Data::ContentTag::Tags.from-hash(%h);
+	ok $restored.nsfw, 'nsfw preserved';
+};
+
+subtest 'from-hash with missing keys uses defaults' => {
+	plan 3;
+	my LLM::Data::ContentTag::Tags $t = LLM::Data::ContentTag::Tags.from-hash({});
+	nok $t.nsfw, 'nsfw defaults false';
+	nok $t.violent, 'violent defaults false';
+	is $t.custom.elems, 0, 'No custom tags';
+};
+
+subtest 'from-hash with all keys' => {
+	plan 4;
+	my LLM::Data::ContentTag::Tags $t = LLM::Data::ContentTag::Tags.from-hash(%(
+		nsfw => True, violent => True, gore => False, custom => ['a', 'b'],
+	));
+	ok $t.nsfw, 'nsfw set';
+	ok $t.violent, 'violent set';
+	nok $t.gore, 'gore not set';
+	is $t.custom.elems, 2, '2 custom tags';
+};

@@ -1,0 +1,9 @@
+Revision history for LLM::Data::ContentTag
+
+{{$NEXT}}
+
+0.1.0  2026-04-07T18:50:57+01:00
+    - Initial release
+    - Tags class with nsfw/violent/gore/custom flags
+    - Rule-based Classifier with customizable keyword lists
+    - Router for mapping content tags to LLM backends
