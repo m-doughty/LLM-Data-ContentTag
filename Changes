@@ -2,6 +2,9 @@ Revision history for LLM::Data::ContentTag
 
 {{$NEXT}}
 
+0.1.2  2026-04-07T19:51:50+01:00
+    - Added Windows CI support via MSVC
+
 0.1.1  2026-04-07T19:22:46+01:00
     - Tags: replaced hardcoded nsfw/violent/gore with generic hash-based tags
     - Classifier: replaced fixed keyword lists with configurable rules hash
