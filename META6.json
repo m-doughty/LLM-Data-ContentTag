@@ -6,8 +6,8 @@
   "build-depends": [
   ],
   "depends": [
-    "Roaring::Tags",
-    "CRoaring"
+    "Roaring::Tags:auth<zef:apogee>",
+    "CRoaring:auth<zef:apogee>"
   ],
   "description": "Content classification and model routing for LLM data pipelines",
   "license": "Artistic-2.0",
@@ -30,5 +30,5 @@
   ],
   "test-depends": [
   ],
-  "version": "0.1.2"
+  "version": "0.1.3"
 }

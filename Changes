@@ -2,6 +2,10 @@ Revision history for LLM::Data::ContentTag
 
 {{$NEXT}}
 
+0.1.3  2026-04-29T23:49:02+01:00
+    - Bump Github actions to use node 24+
+    - Added auth specifiers to META6.json dependencies
+
 0.1.2  2026-04-07T19:51:50+01:00
     - Added Windows CI support via MSVC
 
